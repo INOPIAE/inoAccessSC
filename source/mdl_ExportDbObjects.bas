@@ -26,10 +26,11 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "")
             Fs.CreateFolder (strFolder)
         End If
     End If
-    Kill strFolder & "*.*"
-    
+    If Len(Dir$(strFolder & "*.*")) > 0 Then
+        Kill strFolder & "*.*"
+    End If
     For Each td In db.TableDefs
-        If Left(td.Name, 4) <> "MSys" And IsTableLinked(td.Name) = False Then
+        If Left(td.Name, 4) <> "MSys" And IsTableLinked(td.Name, Application) = False Then
             Application.ExportXML ObjectType:=acExportTable, DataSource:=td.Name, DataTarget:=(strFolder & "Table_" & td.Name & ".xml"), otherflags:=acEmbedSchema
         End If
     Next td
@@ -71,7 +72,7 @@ Err_ExportDatabaseObjects:
     Resume Next
 End Sub
 
-Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Optional ByVal strDatabase As String = "")
+Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Optional ByVal strDatabase As String = "", Optional ByVal ImportData As AcImportXMLOption = acStructureAndData)
     Dim strFile As String
     Dim strSplit() As String
     Dim Fd As FileDialog
@@ -126,7 +127,7 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
                         GoTo NextFile
                     End If
                 End If
-                app.ImportXML DataSource:=strFolder & strFile, ImportOptions:=acStructureAndData
+                app.ImportXML DataSource:=strFolder & strFile, ImportOptions:=ImportData
                 
             Case "Form"
                 If blnCurrentForm = True And strSplit(1) = currentForm Then
@@ -173,7 +174,9 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
 NextFile:
         strFile = Dir
     Loop
-
+    If strDatabase <> "" Then
+        app.Quit
+    End If
 End Sub
 
 Sub clearDebugConsole()
@@ -260,21 +263,12 @@ End Function
 
 Public Function OpenDb(sDb As String) As Access.Application
     On Error GoTo Error_Handler
-    'Early binding
-    'Use the following line if being used in Access or using Access reference
-    '   provides intellisense!
-    Dim oAccess               As Access.Application
-    'Late binding
-    'Use the following line if being used outside of Access without an Access reference
-'    Dim oAccess               As Object
-
-    Set oAccess = CreateObject("Access.Application")    'Create a new Access instance
+    Dim oAccess As Object
+    Set oAccess = CreateObject("Access.Application")
     With oAccess
-        .OpenCurrentDatabase sDb    'Open the specified db
-        Debug.Print oAccess.CurrentDb.Name 'This will trigger an error in the instance
-                                            ' The db isn't opened, already open excl by
-                                            ' another user, ...
-        .Visible = True             'Ensure it is visible to the end-user
+        .OpenCurrentDatabase sDb
+        Debug.Print oAccess.CurrentDb.Name
+        .Visible = True
         .UserControl = True
     End With
     
