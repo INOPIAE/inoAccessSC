@@ -1,0 +1,5 @@
+ID;"Color";"Color German"
+1;"White";"Weiss"
+2;"Black";"Schwarz"
+3;"Blue";"Blau"
+4;"Green";"Grün"
