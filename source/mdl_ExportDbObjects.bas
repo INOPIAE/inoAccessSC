@@ -116,6 +116,7 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
             strSplit = Split(Replace(strFile, ".xml", ""), "_", 2)
         Else
             Debug.Print strFile & " not processed"
+            GoTo NextFile
         End If
         Select Case strSplit(0)
             Case "Table"
