@@ -23,7 +23,7 @@ The code exports the following:
 
 ## Sub RestoreDatabaseObjectsFromFolder
 
-By default the import is taken from the default folder `sourcecode`. If this folder or the given folder is not available the user is pompted to define the locatgen of the folder. Otherwise the sub will be exit.
+By default the import is taken from the default folder `sourcecode`. If this folder or the given folder is not available the user is pompted to define the location of the folder. Otherwise the sub will be exited.
 
 The following file will NOT be imported:
 
