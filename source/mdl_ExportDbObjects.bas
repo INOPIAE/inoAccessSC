@@ -71,11 +71,13 @@ Err_ExportDatabaseObjects:
     Resume Next
 End Sub
 
-Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "")
+Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Optional ByVal strDatabase As String = "")
     Dim strFile As String
     Dim strSplit() As String
     Dim Fd As FileDialog
     Dim Fs As Object
+    Dim db As Database
+    Dim app As Access.Application
     
     Set Fs = CreateObject("Scripting.FileSystemObject")
     
@@ -89,7 +91,7 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "")
             .AllowMultiSelect = False
             .Title = "Please select folder"
             If .Show = True Then
-                strFolder = .SelectedItems(1)
+                strFolder = .SelectedItems(1) & "\"
             Else
                 Exit Sub
             End If
@@ -97,8 +99,14 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "")
         Set Fd = Nothing
     End If
     
-    clearDebugConsole
+    If strDatabase = "" Then
+        Set app = Application
+    Else
+        Set app = OpenDb(strDatabase)
+    End If
     
+    clearDebugConsole
+
     strFile = Dir(strFolder & "*")
     Do While Len(strFile) > 0
         If InStr(strFile, ".txt") > 0 Then
@@ -110,52 +118,56 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "")
         End If
         Select Case strSplit(0)
             Case "Table"
-                If IsTableLinked(strSplit(1)) = False Then
-                    If TableExist(strSplit(1)) = True Then
-                        CurrentDb.Execute "DROP TABLE " & strSplit(1), dbFailOnError
+                
+                If TableExist(strSplit(1), app) = True Then
+                    If IsTableLinked(strSplit(1), app) = False Then
+                        app.CurrentDb.Execute "DROP TABLE " & strSplit(1), dbFailOnError
+                    Else
+                        GoTo NextFile
                     End If
-                Application.ImportXML DataSource:=strFolder & strFile, ImportOptions:=acStructureAndData
                 End If
+                app.ImportXML DataSource:=strFolder & strFile, ImportOptions:=acStructureAndData
+                
             Case "Form"
                 If blnCurrentForm = True And strSplit(1) = currentForm Then
                 
                 Else
-                    If FormExist(strSplit(1)) = True Then
-                        DoCmd.DeleteObject acForm, strSplit(1)
+                    If FormExist(strSplit(1), app) = True Then
+                        app.DoCmd.DeleteObject acForm, strSplit(1)
                     End If
-                    Application.LoadFromText acForm, strSplit(1), strFolder & strFile
+                    app.LoadFromText acForm, strSplit(1), strFolder & strFile
                 End If
             Case "Report"
-                If ReportExist(strSplit(1)) = True Then
-                    DoCmd.DeleteObject acReport, strSplit(1)
+                If ReportExist(strSplit(1), app) = True Then
+                    app.DoCmd.DeleteObject acReport, strSplit(1)
                 End If
-                Application.LoadFromText acReport, strSplit(1), strFolder & strFile
+                app.LoadFromText acReport, strSplit(1), strFolder & strFile
             Case "Query"
                 If InStr(strSplit(1), "~") > 0 Then
                     GoTo NextFile
                 End If
-                If QueryExist(strSplit(1)) = True Then
-                    DoCmd.DeleteObject acQuery, strSplit(1)
+                If QueryExist(strSplit(1), app) = True Then
+                    app.DoCmd.DeleteObject acQuery, strSplit(1)
                 End If
-                Application.LoadFromText acQuery, strSplit(1), strFolder & strFile
+                app.LoadFromText acQuery, strSplit(1), strFolder & strFile
             
             Case "Macro"
                 If Left(strSplit(1), 1) = "~" Then
                     GoTo NextFile
                 End If
-                If MacroExist(strSplit(1)) = True Then
-                    DoCmd.DeleteObject acMacro, strSplit(1)
+                If MacroExist(strSplit(1), app) = True Then
+                    app.DoCmd.DeleteObject acMacro, strSplit(1)
                 End If
-                Application.LoadFromText acMacro, strSplit(1), strFolder & strFile
+                app.LoadFromText acMacro, strSplit(1), strFolder & strFile
 
             Case "Module"
                 If strSplit(1) = baseModule Then
                     GoTo NextFile
                 End If
-                If ModuleExist(strSplit(1)) = True Then
-                    DoCmd.DeleteObject acModule, strSplit(1)
+                If ModuleExist(strSplit(1), app) = True Then
+                    app.DoCmd.DeleteObject acModule, strSplit(1)
                 End If
-                Application.LoadFromText acModule, strSplit(1), strFolder & strFile
+                app.LoadFromText acModule, strSplit(1), strFolder & strFile
         End Select
         Debug.Print (strSplit(1))
 NextFile:
@@ -171,10 +183,10 @@ Sub clearDebugConsole()
     Next i
 End Sub
 
-Function FormExist(ByVal strFormname As String) As Boolean
+Function FormExist(ByVal strFormname As String, app As Access.Application) As Boolean
     Dim frm As Access.AccessObject
 
-    For Each frm In Application.CurrentProject.AllForms
+    For Each frm In app.CurrentProject.AllForms
         If strFormname = frm.Name Then
             FormExist = True
             Exit For
@@ -182,10 +194,10 @@ Function FormExist(ByVal strFormname As String) As Boolean
     Next
 End Function
 
-Function ModuleExist(ByVal strModulename As String) As Boolean
+Function ModuleExist(ByVal strModulename As String, app As Access.Application) As Boolean
     Dim mdl As Access.AccessObject
 
-    For Each mdl In Application.CurrentProject.AllMacros
+    For Each mdl In app.CurrentProject.AllModules
         If strModulename = mdl.Name Then
             ModuleExist = True
             Exit For
@@ -193,10 +205,10 @@ Function ModuleExist(ByVal strModulename As String) As Boolean
     Next
 End Function
 
-Function QueryExist(ByVal strQueryname As String) As Boolean
+Function QueryExist(ByVal strQueryname As String, app As Access.Application) As Boolean
     Dim qry
 
-    For Each qry In CurrentDb.QueryDefs
+    For Each qry In app.CurrentDb.QueryDefs
         If strQueryname = qry.Name Then
             QueryExist = True
             Exit For
@@ -204,10 +216,10 @@ Function QueryExist(ByVal strQueryname As String) As Boolean
     Next
 End Function
 
-Function ReportExist(ByVal strReportname As String) As Boolean
+Function ReportExist(ByVal strReportname As String, app As Access.Application) As Boolean
     Dim rpt
 
-    For Each rpt In Application.CurrentProject.AllReports
+    For Each rpt In app.CurrentProject.AllReports
         If strReportname = rpt.Name Then
             ReportExist = True
             Exit For
@@ -215,10 +227,10 @@ Function ReportExist(ByVal strReportname As String) As Boolean
     Next
 End Function
 
-Function MacroExist(ByVal strMacroname As String) As Boolean
+Function MacroExist(ByVal strMacroname As String, app As Access.Application) As Boolean
     Dim mrc
 
-    For Each mrc In Application.CurrentProject.AllMacros
+    For Each mrc In app.CurrentProject.AllMacros
         If strMacroname = mrc.Name Then
             MacroExist = True
             Exit For
@@ -226,10 +238,10 @@ Function MacroExist(ByVal strMacroname As String) As Boolean
     Next
 End Function
 
-Function TableExist(ByVal strTablename As String) As Boolean
+Function TableExist(ByVal strTablename As String, app As Access.Application) As Boolean
     Dim tbldef
 
-    For Each tbldef In CurrentDb.TableDefs
+    For Each tbldef In app.CurrentDb.TableDefs
         If tbldef.Name = strTablename Then
             TableExist = True
             Exit For
@@ -237,12 +249,52 @@ Function TableExist(ByVal strTablename As String) As Boolean
     Next tbldef
 End Function
 
-Function IsTableLinked(ByVal strTablename As String) As Boolean
+Function IsTableLinked(ByVal strTablename As String, app As Access.Application) As Boolean
     ' Non-linked tables have a type of 1,
     ' tables linked using ODBC have a type of 4
     ' and all other linked tables have a type of 6
     
-    IsTableLinked = Nz(DLookup("Type", "MSysObjects", "Name = '" & strTablename & "'"), 0) <> 1
+    IsTableLinked = Nz(app.DLookup("Type", "MSysObjects", "Name = '" & strTablename & "'"), 0) <> 1
 
 End Function
 
+Public Function OpenDb(sDb As String) As Access.Application
+    On Error GoTo Error_Handler
+    'Early binding
+    'Use the following line if being used in Access or using Access reference
+    '   provides intellisense!
+    Dim oAccess               As Access.Application
+    'Late binding
+    'Use the following line if being used outside of Access without an Access reference
+'    Dim oAccess               As Object
+
+    Set oAccess = CreateObject("Access.Application")    'Create a new Access instance
+    With oAccess
+        .OpenCurrentDatabase sDb    'Open the specified db
+        Debug.Print oAccess.CurrentDb.Name 'This will trigger an error in the instance
+                                            ' The db isn't opened, already open excl by
+                                            ' another user, ...
+        .Visible = True             'Ensure it is visible to the end-user
+        .UserControl = True
+    End With
+    
+    Set OpenDb = oAccess
+
+Error_Handler_Exit:
+    On Error Resume Next
+    Set oAccess = Nothing
+    Exit Function
+
+Error_Handler:
+    'Occurs when the db has checks (AutoExec) UserControl to block automation, doesn't stop the connection if it is already open though.
+    '-2147417848   Automation error - The object invoked has disconnected from its clients.
+    If Err.Number <> 91 Then
+        MsgBox "The following error has occurred" & vbCrLf & vbCrLf & _
+               "Error Number: " & Err.Number & vbCrLf & _
+               "Error Source: OpenDb" & vbCrLf & _
+               "Error Description: " & Err.Description & _
+               Switch(Erl = 0, "", Erl <> 0, vbCrLf & "Line No: " & Erl) _
+               , vbOKOnly + vbCritical, "An Error has Occurred!"
+    End If
+    Resume Error_Handler_Exit
+End Function
