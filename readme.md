@@ -25,8 +25,14 @@ The code exports the following:
 
 By default the import is taken from the default folder `sourcecode`. If this folder or the given folder is not available the user is pompted to define the location of the folder. Otherwise the sub will be exited.
 
-The following file will NOT be imported:
+The sub has four optional parameters:
+* strFolder - location of the folder holding the import files
+* strDatabase - path to a database if not the current one
+* ImportData  - select of the table data should be imported, default is import. Given as AcImportXMLOption 
+
+The following files will NOT be imported:
 
 * all interal queries and macro files containing a "~"
 * the module `mdl_ExportDbObjects` which is defined as constant `baseModule` at the beginning of the code.
 * If the code is started from a form the name od the form should be storedin the constant `currentForm` at the beginning of the code and the varibale `blnCurrentForm` must be set to `True`.
+
