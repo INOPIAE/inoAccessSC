@@ -6,7 +6,7 @@ Public blnCurrentForm As Boolean
 Const currentForm As String = "frmSourcecode Handling"
 Const baseModule As String = "mdl_ExportDbObjects"
 
-Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "")
+Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "", Optional ByVal blnHash As Boolean = False)
     On Error GoTo Err_ExportDatabaseObjects
     
     Dim db As Database
@@ -14,10 +14,18 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "")
     Dim d As Document
     Dim c As Container
     Dim i As Integer
+    Dim AppVersion As String
     
     Dim Fs As Object
     
     Set db = CurrentDb()
+    
+    If blnHash = True Then
+        CreateHashTable
+        AppVersion = getAppVersion
+    Else
+        AppVersion = ""
+    End If
     
     If strFolder = "" Then
         strFolder = Application.CurrentProject.Path & "\sourcecode\"
@@ -32,31 +40,37 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "")
     For Each td In db.TableDefs
         If Left(td.Name, 4) <> "MSys" And IsTableLinked(td.Name, Application) = False Then
             Application.ExportXML ObjectType:=acExportTable, DataSource:=td.Name, DataTarget:=(strFolder & "Table_" & td.Name & ".xml"), otherflags:=acEmbedSchema
+            WriteAppVersion td.Name, strFolder & "Table_" & td.Name & ".xml", AppVersion
         End If
     Next td
     
     Set c = db.Containers("Forms")
     For Each d In c.Documents
         Application.SaveAsText acForm, d.Name, strFolder & "Form_" & d.Name & ".txt"
+        WriteAppVersion d.Name, strFolder & "Form_" & d.Name & ".txt", AppVersion
     Next d
     
     Set c = db.Containers("Reports")
     For Each d In c.Documents
         Application.SaveAsText acReport, d.Name, strFolder & "Report_" & d.Name & ".txt"
+        WriteAppVersion d.Name, strFolder & "Report_" & d.Name & ".txt", AppVersion
     Next d
     
     Set c = db.Containers("Scripts")
     For Each d In c.Documents
         Application.SaveAsText acMacro, d.Name, strFolder & "Macro_" & d.Name & ".txt"
+        WriteAppVersion d.Name, strFolder & "Macro_" & d.Name & ".txt", AppVersion
     Next d
     
     Set c = db.Containers("Modules")
     For Each d In c.Documents
         Application.SaveAsText acModule, d.Name, strFolder & "Module_" & d.Name & ".txt"
+        WriteAppVersion d.Name, strFolder & "Module_" & d.Name & ".txt", AppVersion
     Next d
     
     For i = 0 To db.QueryDefs.Count - 1
         Application.SaveAsText acQuery, db.QueryDefs(i).Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt"
+        WriteAppVersion d.Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt", AppVersion
     Next i
     
     Set db = Nothing
@@ -268,7 +282,6 @@ Public Function OpenDb(sDb As String) As Access.Application
     Set oAccess = CreateObject("Access.Application")
     With oAccess
         .OpenCurrentDatabase sDb
-        Debug.Print oAccess.CurrentDb.Name
         .Visible = True
         .UserControl = True
     End With
@@ -293,3 +306,184 @@ Error_Handler:
     End If
     Resume Error_Handler_Exit
 End Function
+
+
+Sub CreateHashTable()
+    Dim app As Access.Application
+    Dim strTable As String
+    strTable = "tbl_DevInfo"
+    Set app = Application
+    If TableExist(strTable, app) = False Then
+        Dim db As DAO.Database
+        Dim fld As DAO.Field
+        Dim prp As DAO.Property
+        Dim Tbl As DAO.TableDef
+        Dim Ind As DAO.Index
+        
+        Set db = app.CurrentDb
+        Set Tbl = db.CreateTableDef(strTable)
+            
+        With Tbl
+            Set fld = .CreateField(strTable & "ID", dbLong)
+            fld.Attributes = dbAutoIncrField + dbFixedField
+            .Fields.Append fld
+            
+        End With
+        
+        'Primary key index.
+        Set Ind = Tbl.CreateIndex("PrimaryKey")
+        With Ind
+            .Fields.Append .CreateField(strTable & "ID")
+            .Unique = True
+            .Primary = True
+        End With
+        Tbl.Indexes.Append Ind
+        
+        Set fld = Tbl.CreateField("ObjectName", dbText, 255)
+        Tbl.Fields.Append fld
+    
+        Set fld = Tbl.CreateField("AppVersion", dbText, 10)
+        Tbl.Fields.Append fld
+        
+        Set fld = Tbl.CreateField("FileHash", dbText, 128)
+        Tbl.Fields.Append fld
+                
+        Set fld = Tbl.CreateField("created", dbDate)
+        fld.DefaultValue = "=Now()"
+        Tbl.Fields.Append fld
+        
+        'Save the table.
+        db.TableDefs.Append Tbl
+    End If
+End Sub
+
+Function getAppVersion() As String
+    Dim app As Access.Application
+    Dim strTable As String
+    strTable = "tDBInfo"
+    Set app = Application
+    If TableExist(strTable, app) = False Then
+        getAppVersion = "0.1"
+    Else
+        Dim strSQL As String
+        Dim rsDB As DAO.Recordset
+        strSQL = "SELECT tDBInfo.* FROM tDBInfo "
+        Set rsDB = app.CurrentDb.OpenRecordset(strSQL, dbOpenDynaset)
+        With rsDB
+            getAppVersion = .Fields(0).Value
+        End With
+    End If
+End Function
+
+Sub WriteAppVersion(strObject As String, strFilename As String, strAppVersion As String)
+    Dim strSQL As String
+    Dim HashString As String
+    If InStr(strFilename, "~") > 0 Or strAppVersion = "" Then
+        Exit Sub
+    End If
+    HashString = FileToSHA512(strFilename)
+    If IsNull(DLookup("tbl_DevInfoID", "tbl_DevInfo", "AppVersion = '" & strAppVersion & "' AND ObjectName = '" & strObject & "'")) Then
+        strSQL = "INSERT INTO tbl_DevInfo (ObjectName, AppVersion, FileHash) VALUES ('" & strObject & "', '" & strAppVersion & "', '" & HashString & "')"
+        CurrentDb.Execute strSQL
+    Else
+        Dim id As Long
+        id = DLookup("tbl_DevInfoID", "tbl_DevInfo", "AppVersion = '" & strAppVersion & "' AND ObjectName = '" & strObject & "'")
+        strSQL = "UPDATE tbl_DevInfo SET FileHash = '" & HashString & "', created = NOW() WHERE tbl_DevInfoID = " & id
+        CurrentDb.Execute strSQL
+    End If
+    
+End Sub
+
+Public Function FileToSHA512(sFullPath As String, Optional bB64 As Boolean = False) As String
+    'parameter full path with name of file returned in the function as an SHA2-512 hash
+    'Set a reference to mscorlib 4.0 64-bit
+    'Make sure that Net Framework 3.5 (includes .Net 2 and .Net 3) is installed and enabled
+    'and not only the Net Framework 4.8 Advanced Services
+    
+    Dim enc, bytes, outstr As String, pos As Integer
+    
+    Set enc = CreateObject("System.Security.Cryptography.SHA512Managed")
+    'Convert the string to a byte array and hash it
+    bytes = GetFileBytes(sFullPath) 'returned as a byte array
+    bytes = enc.ComputeHash_2((bytes))
+    
+    If bB64 = True Then
+       FileToSHA512 = ConvToBase64String(bytes)
+    Else
+       FileToSHA512 = ConvToHexString(bytes)
+    End If
+
+    Set enc = Nothing
+
+End Function
+
+Private Function GetFileBytes(ByVal sPath As String) As Byte()
+    'makes byte array from file
+    'Set a reference to mscorlib 4.0 64-bit
+    'Make sure that Net Framework 3.5 (includes .Net 2 and .Net 3) is installed and enabled
+    'and not only the Net Framework 4.8 Advanced Services
+    
+    Dim lngFileNum As Long, bytRtnVal() As Byte, bTest
+    
+    lngFileNum = FreeFile
+
+    If LenB(Dir(sPath)) Then ''// Does file exist?
+        
+        Open sPath For Binary Access Read As lngFileNum
+        
+        'a zero length file content will give error 9 here
+        
+        ReDim bytRtnVal(0 To LOF(lngFileNum) - 1&) As Byte
+        Get lngFileNum, , bytRtnVal
+        Close lngFileNum
+    Else
+        Err.Raise 53 'File not found
+    End If
+    
+    GetFileBytes = bytRtnVal
+    
+    Erase bytRtnVal
+
+End Function
+
+Function ConvToBase64String(vIn As Variant) As Variant
+    'used to produce a base-64 output
+    'Set a reference to mscorlib 4.0 64-bit
+    'Make sure that Net Framework 3.5 (includes .Net 2 and .Net 3) is installed and enabled
+    'and not only the Net Framework 4.8 Advanced Services
+    
+    Dim oD As Object
+      
+    Set oD = CreateObject("MSXML2.DOMDocument")
+      With oD
+        .LoadXML "<root />"
+        .DocumentElement.DataType = "bin.base64"
+        .DocumentElement.nodeTypedValue = vIn
+      End With
+    ConvToBase64String = Replace(oD.DocumentElement.Text, vbLf, "")
+    
+    Set oD = Nothing
+
+End Function
+
+Function ConvToHexString(vIn As Variant) As Variant
+     'used to produce a hex output
+    'Set a reference to mscorlib 4.0 64-bit
+    'Make sure that Net Framework 3.5 (includes .Net 2 and .Net 3) is installed and enabled
+    'and not only the Net Framework 4.8 Advanced Services
+    
+    Dim oD As Object
+      
+    Set oD = CreateObject("MSXML2.DOMDocument")
+      
+      With oD
+        .LoadXML "<root />"
+        .DocumentElement.DataType = "bin.Hex"
+        .DocumentElement.nodeTypedValue = vIn
+      End With
+    ConvToHexString = Replace(oD.DocumentElement.Text, vbLf, "")
+    
+    Set oD = Nothing
+
+End Function
+
