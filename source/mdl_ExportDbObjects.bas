@@ -132,59 +132,7 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
             Debug.Print strFile & " not processed"
             GoTo NextFile
         End If
-        Select Case strSplit(0)
-            Case "Table"
-                
-                If TableExist(strSplit(1), app) = True Then
-                    If IsTableLinked(strSplit(1), app) = False Then
-                        app.CurrentDb.Execute "DROP TABLE " & strSplit(1), dbFailOnError
-                    Else
-                        GoTo NextFile
-                    End If
-                End If
-                app.ImportXML DataSource:=strFolder & strFile, ImportOptions:=ImportData
-                
-            Case "Form"
-                If blnCurrentForm = True And strSplit(1) = currentForm Then
-                
-                Else
-                    If FormExist(strSplit(1), app) = True Then
-                        app.DoCmd.DeleteObject acForm, strSplit(1)
-                    End If
-                    app.LoadFromText acForm, strSplit(1), strFolder & strFile
-                End If
-            Case "Report"
-                If ReportExist(strSplit(1), app) = True Then
-                    app.DoCmd.DeleteObject acReport, strSplit(1)
-                End If
-                app.LoadFromText acReport, strSplit(1), strFolder & strFile
-            Case "Query"
-                If InStr(strSplit(1), "~") > 0 Then
-                    GoTo NextFile
-                End If
-                If QueryExist(strSplit(1), app) = True Then
-                    app.DoCmd.DeleteObject acQuery, strSplit(1)
-                End If
-                app.LoadFromText acQuery, strSplit(1), strFolder & strFile
-            
-            Case "Macro"
-                If Left(strSplit(1), 1) = "~" Then
-                    GoTo NextFile
-                End If
-                If MacroExist(strSplit(1), app) = True Then
-                    app.DoCmd.DeleteObject acMacro, strSplit(1)
-                End If
-                app.LoadFromText acMacro, strSplit(1), strFolder & strFile
-
-            Case "Module"
-                If strSplit(1) = baseModule Then
-                    GoTo NextFile
-                End If
-                If ModuleExist(strSplit(1), app) = True Then
-                    app.DoCmd.DeleteObject acModule, strSplit(1)
-                End If
-                app.LoadFromText acModule, strSplit(1), strFolder & strFile
-        End Select
+        ImportFile strFolder, strSplit(1), app
         Debug.Print (strSplit(1))
 NextFile:
         strFile = Dir
@@ -487,3 +435,116 @@ Function ConvToHexString(vIn As Variant) As Variant
 
 End Function
 
+Sub RestoreSingleDatabaseObjects(ByVal strFile As String, Optional ByVal strDatabase As String = "", Optional ByVal ImportData As AcImportXMLOption = acStructureAndData)
+    Dim strFolder As String
+    Dim f
+    Dim Fd As FileDialog
+    Dim Fs As Object
+    Dim db As Database
+    Dim app As Access.Application
+    
+    Set Fs = CreateObject("Scripting.FileSystemObject")
+    
+
+ 
+    If Fs.FileExists(strFile) = False Then
+        Set Fd = Application.FileDialog(msoFileDialogOpen)
+        With Fd
+            .AllowMultiSelect = False
+            .Title = "Please select a file"
+            If .Show = True Then
+                strFile = .SelectedItems(1)
+            Else
+                Exit Sub
+            End If
+        End With
+        Set Fd = Nothing
+    End If
+    
+    If strDatabase = "" Then
+        Set app = Application
+    Else
+        Set app = OpenDb(strDatabase)
+    End If
+    
+    clearDebugConsole
+    
+    Set f = Fs.GetFile(strFile)
+    strFolder = f.ParentFolder & "\"
+    strFile = f.Name
+    
+    ImportFile strFolder, strFile, app
+    
+    If strDatabase <> "" Then
+        app.Quit
+    End If
+End Sub
+
+Public Function ImportFile(ByVal strFolder As String, ByVal strFile As String, app As Access.Application, Optional ByVal ImportData As AcImportXMLOption = acStructureAndData) As Boolean
+    Dim strSplit() As String
+    
+    ImportFile = False
+    
+    If InStr(strFile, ".txt") > 0 Then
+        strSplit = Split(Replace(strFile, ".txt", ""), "_", 2)
+    ElseIf InStr(strFile, ".xml") > 0 Then
+        strSplit = Split(Replace(strFile, ".xml", ""), "_", 2)
+    Else
+        Debug.Print strFile & " not processed"
+        Exit Function
+    End If
+    Select Case strSplit(0)
+        Case "Table"
+            
+            If TableExist(strSplit(1), app) = True Then
+                If IsTableLinked(strSplit(1), app) = False Then
+                    app.CurrentDb.Execute "DROP TABLE " & strSplit(1), dbFailOnError
+                End If
+            End If
+            app.ImportXML DataSource:=strFolder & strFile, ImportOptions:=ImportData
+            
+        Case "Form"
+            If blnCurrentForm = True And strSplit(1) = currentForm Then
+            
+            Else
+                If FormExist(strSplit(1), app) = True Then
+                    app.DoCmd.DeleteObject acForm, strSplit(1)
+                End If
+                app.LoadFromText acForm, strSplit(1), strFolder & strFile
+            End If
+        Case "Report"
+            If ReportExist(strSplit(1), app) = True Then
+                app.DoCmd.DeleteObject acReport, strSplit(1)
+            End If
+            app.LoadFromText acReport, strSplit(1), strFolder & strFile
+        Case "Query"
+            If InStr(strSplit(1), "~") > 0 Then
+                Exit Function
+            End If
+            If QueryExist(strSplit(1), app) = True Then
+                app.DoCmd.DeleteObject acQuery, strSplit(1)
+            End If
+            app.LoadFromText acQuery, strSplit(1), strFolder & strFile
+        
+        Case "Macro"
+            If Left(strSplit(1), 1) = "~" Then
+                Exit Function
+            End If
+            If MacroExist(strSplit(1), app) = True Then
+                app.DoCmd.DeleteObject acMacro, strSplit(1)
+            End If
+            app.LoadFromText acMacro, strSplit(1), strFolder & strFile
+
+        Case "Module"
+            If strSplit(1) = baseModule Then
+                Exit Function
+            End If
+            If ModuleExist(strSplit(1), app) = True Then
+                app.DoCmd.DeleteObject acModule, strSplit(1)
+            End If
+            app.LoadFromText acModule, strSplit(1), strFolder & strFile
+    End Select
+    Debug.Print (strSplit(1))
+    ImportFile = True
+
+End Function
