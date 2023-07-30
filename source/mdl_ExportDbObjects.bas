@@ -70,7 +70,7 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "", Option
     
     For i = 0 To db.QueryDefs.Count - 1
         Application.SaveAsText acQuery, db.QueryDefs(i).Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt"
-        WriteAppVersion d.Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt", AppVersion
+        WriteAppVersion db.QueryDefs(i).Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt", AppVersion
     Next i
     
     Set db = Nothing
