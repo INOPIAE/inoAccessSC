@@ -13,25 +13,25 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "", Option
     Dim td As TableDef
     Dim d As Document
     Dim c As Container
-    Dim i As Integer
-    Dim AppVersion As String
+    Dim I As Integer
+    Dim appVersion As String
     
-    Dim Fs As Object
+    Dim fs As Object
     
     Set db = CurrentDb()
     
     If blnHash = True Then
         CreateHashTable
-        AppVersion = getAppVersion
+        appVersion = getAppVersion
     Else
-        AppVersion = ""
+        appVersion = ""
     End If
     
     If strFolder = "" Then
         strFolder = Application.CurrentProject.Path & "\sourcecode\"
-        Set Fs = CreateObject("Scripting.FileSystemObject")
-        If Fs.FolderExists(strFolder) = False Then
-            Fs.CreateFolder (strFolder)
+        Set fs = CreateObject("Scripting.FileSystemObject")
+        If fs.FolderExists(strFolder) = False Then
+            fs.CreateFolder (strFolder)
         End If
     End If
     If Len(Dir$(strFolder & "*.*")) > 0 Then
@@ -40,38 +40,38 @@ Public Sub ExportDatabaseObjects(Optional ByVal strFolder As String = "", Option
     For Each td In db.TableDefs
         If Left(td.Name, 4) <> "MSys" And IsTableLinked(td.Name, Application) = False Then
             Application.ExportXML ObjectType:=acExportTable, DataSource:=td.Name, DataTarget:=(strFolder & "Table_" & td.Name & ".xml"), otherflags:=acEmbedSchema
-            WriteAppVersion td.Name, strFolder & "Table_" & td.Name & ".xml", AppVersion
+            WriteAppVersion td.Name, strFolder & "Table_" & td.Name & ".xml", appVersion
         End If
     Next td
     
     Set c = db.Containers("Forms")
     For Each d In c.Documents
         Application.SaveAsText acForm, d.Name, strFolder & "Form_" & d.Name & ".txt"
-        WriteAppVersion d.Name, strFolder & "Form_" & d.Name & ".txt", AppVersion
+        WriteAppVersion d.Name, strFolder & "Form_" & d.Name & ".txt", appVersion
     Next d
     
     Set c = db.Containers("Reports")
     For Each d In c.Documents
         Application.SaveAsText acReport, d.Name, strFolder & "Report_" & d.Name & ".txt"
-        WriteAppVersion d.Name, strFolder & "Report_" & d.Name & ".txt", AppVersion
+        WriteAppVersion d.Name, strFolder & "Report_" & d.Name & ".txt", appVersion
     Next d
     
     Set c = db.Containers("Scripts")
     For Each d In c.Documents
         Application.SaveAsText acMacro, d.Name, strFolder & "Macro_" & d.Name & ".txt"
-        WriteAppVersion d.Name, strFolder & "Macro_" & d.Name & ".txt", AppVersion
+        WriteAppVersion d.Name, strFolder & "Macro_" & d.Name & ".txt", appVersion
     Next d
     
     Set c = db.Containers("Modules")
     For Each d In c.Documents
         Application.SaveAsText acModule, d.Name, strFolder & "Module_" & d.Name & ".txt"
-        WriteAppVersion d.Name, strFolder & "Module_" & d.Name & ".txt", AppVersion
+        WriteAppVersion d.Name, strFolder & "Module_" & d.Name & ".txt", appVersion
     Next d
     
-    For i = 0 To db.QueryDefs.Count - 1
-        Application.SaveAsText acQuery, db.QueryDefs(i).Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt"
-        WriteAppVersion db.QueryDefs(i).Name, strFolder & "Query_" & db.QueryDefs(i).Name & ".txt", AppVersion
-    Next i
+    For I = 0 To db.QueryDefs.Count - 1
+        Application.SaveAsText acQuery, db.QueryDefs(I).Name, strFolder & "Query_" & db.QueryDefs(I).Name & ".txt"
+        WriteAppVersion db.QueryDefs(I).Name, strFolder & "Query_" & db.QueryDefs(I).Name & ".txt", appVersion
+    Next I
     
     Set db = Nothing
     Set c = Nothing
@@ -90,17 +90,17 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
     Dim strFile As String
     Dim strSplit() As String
     Dim Fd As FileDialog
-    Dim Fs As Object
+    Dim fs As Object
     Dim db As Database
     Dim app As Access.Application
     
-    Set Fs = CreateObject("Scripting.FileSystemObject")
+    Set fs = CreateObject("Scripting.FileSystemObject")
     
     If strFolder = "" Then
-        strFolder = Application.CurrentProject.Path & "\sourcecode\"
+        strFolder = Application.CurrentProject.Path & "\sourcecode"
     End If
  
-    If Fs.FolderExists(strFolder) = False Then
+    If fs.FolderExists(strFolder) = False Then
         Set Fd = Application.FileDialog(msoFileDialogFolderPicker)
         With Fd
             .AllowMultiSelect = False
@@ -114,6 +114,7 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
         Set Fd = Nothing
     End If
     
+    strFolder = strFolder & "\"
     If strDatabase = "" Then
         Set app = Application
     Else
@@ -124,7 +125,10 @@ Sub RestoreDatabaseObjectsFromFolder(Optional ByVal strFolder As String = "", Op
 
     strFile = Dir(strFolder & "*")
     Do While Len(strFile) > 0
-        If InStr(strFile, ".txt") > 0 Then
+        If strFile = "version.txt" Then
+            UpdateDBVersion strFolder & strFile, app
+            GoTo NextFile
+        ElseIf InStr(strFile, ".txt") > 0 Then
             strSplit = Split(Replace(strFile, ".txt", ""), "_", 2)
         ElseIf InStr(strFile, ".xml") > 0 Then
             strSplit = Split(Replace(strFile, ".xml", ""), "_", 2)
@@ -143,10 +147,10 @@ NextFile:
 End Sub
 
 Sub clearDebugConsole()
-    Dim i As Integer
-    For i = 0 To 200
+    Dim I As Integer
+    For I = 0 To 200
         Debug.Print ""
-    Next i
+    Next I
 End Sub
 
 Function FormExist(ByVal strFormname As String, app As Access.Application) As Boolean
@@ -313,10 +317,10 @@ Function getAppVersion() As String
     If TableExist(strTable, app) = False Then
         getAppVersion = "0.1"
     Else
-        Dim strSQL As String
+        Dim strSql As String
         Dim rsDB As DAO.Recordset
-        strSQL = "SELECT tDBInfo.* FROM tDBInfo "
-        Set rsDB = app.CurrentDb.OpenRecordset(strSQL, dbOpenDynaset)
+        strSql = "SELECT tDBInfo.* FROM tDBInfo "
+        Set rsDB = app.CurrentDb.OpenRecordset(strSql, dbOpenDynaset)
         With rsDB
             getAppVersion = .Fields(0).Value
         End With
@@ -324,20 +328,20 @@ Function getAppVersion() As String
 End Function
 
 Sub WriteAppVersion(strObject As String, strFilename As String, strAppVersion As String)
-    Dim strSQL As String
+    Dim strSql As String
     Dim HashString As String
     If InStr(strFilename, "~") > 0 Or strAppVersion = "" Then
         Exit Sub
     End If
     HashString = FileToSHA512(strFilename)
     If IsNull(DLookup("tbl_DevInfoID", "tbl_DevInfo", "AppVersion = '" & strAppVersion & "' AND ObjectName = '" & strObject & "'")) Then
-        strSQL = "INSERT INTO tbl_DevInfo (ObjectName, AppVersion, FileHash) VALUES ('" & strObject & "', '" & strAppVersion & "', '" & HashString & "')"
-        CurrentDb.Execute strSQL
+        strSql = "INSERT INTO tbl_DevInfo (ObjectName, AppVersion, FileHash) VALUES ('" & strObject & "', '" & strAppVersion & "', '" & HashString & "')"
+        CurrentDb.Execute strSql
     Else
         Dim id As Long
         id = DLookup("tbl_DevInfoID", "tbl_DevInfo", "AppVersion = '" & strAppVersion & "' AND ObjectName = '" & strObject & "'")
-        strSQL = "UPDATE tbl_DevInfo SET FileHash = '" & HashString & "', created = NOW() WHERE tbl_DevInfoID = " & id
-        CurrentDb.Execute strSQL
+        strSql = "UPDATE tbl_DevInfo SET FileHash = '" & HashString & "', created = NOW() WHERE tbl_DevInfoID = " & id
+        CurrentDb.Execute strSql
     End If
     
 End Sub
@@ -439,15 +443,15 @@ Sub RestoreSingleDatabaseObjects(ByVal strFile As String, Optional ByVal strData
     Dim strFolder As String
     Dim f
     Dim Fd As FileDialog
-    Dim Fs As Object
+    Dim fs As Object
     Dim db As Database
     Dim app As Access.Application
     
-    Set Fs = CreateObject("Scripting.FileSystemObject")
+    Set fs = CreateObject("Scripting.FileSystemObject")
     
 
  
-    If Fs.FileExists(strFile) = False Then
+    If fs.FileExists(strFile) = False Then
         Set Fd = Application.FileDialog(msoFileDialogOpen)
         With Fd
             .AllowMultiSelect = False
@@ -469,7 +473,7 @@ Sub RestoreSingleDatabaseObjects(ByVal strFile As String, Optional ByVal strData
     
     clearDebugConsole
     
-    Set f = Fs.GetFile(strFile)
+    Set f = fs.GetFile(strFile)
     strFolder = f.ParentFolder & "\"
     strFile = f.Name
     
@@ -548,3 +552,29 @@ Public Function ImportFile(ByVal strFolder As String, ByVal strFile As String, a
     ImportFile = True
 
 End Function
+
+Public Function UpdateDBVersion(ByVal strFile As String, app As Access.Application)
+    Dim fs As Object
+    Set fs = CreateObject("Scripting.FileSystemObject")
+
+    Dim verFile As Object
+    Dim myFilePath As String
+    Dim strInput As String
+    Dim appVersion() As String
+    Dim strSql As String
+
+    Const ForReading = 1
+   
+    Set verFile = fs.OpenTextFile(strFile, ForReading)
+    strInput = verFile.ReadAll
+    verFile.Close
+    
+    appVersion = Split(strInput, ":")
+    
+        
+    strSql = "Update tDBInfo SET AnVer = '" & appVersion(1) & "', Zustand = FALSE"
+    app.CurrentDb.Execute strSql
+
+End Function
+
+
